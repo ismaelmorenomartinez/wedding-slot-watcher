@@ -146,11 +146,45 @@ def visible_text(html: str) -> str:
     return re.sub(r"\s+", " ", soup.get_text(" "))
 
 
+# --- FrontDeskSuite availability parsing ------------------------------------
+# The Copenhagen City Hall booking page renders availability as English date
+# headers ("Tuesday October 13th, 2026") each followed by time links
+# ("9:20 a.m."). We pair each time with the date heading that precedes it.
+
+_FD_DATE = (
+    r"(?:Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday)\s+"
+    r"(?:January|February|March|April|May|June|July|August|September|October|November|December)\s+"
+    r"\d{1,2}\S*\s*,?\s*\d{4}"
+)
+_FD_TIME = r"\d{1,2}:\d{2}\s*[ap]\.?\s*m\.?"
+_FD_TOKEN = re.compile(f"(?P<date>{_FD_DATE})|(?P<time>{_FD_TIME})", re.IGNORECASE)
+
+
+def _norm_date(d: str) -> str:
+    # Drop the unicode superscript ordinal ("13th") and collapse whitespace.
+    return re.sub(r"\s+", " ", d.encode("ascii", "ignore").decode()).replace(" ,", ",").strip()
+
+
+def extract_frontdesk_slots(text: str) -> list[str]:
+    slots, current = [], None
+    for m in _FD_TOKEN.finditer(text):
+        if m.group("date"):
+            current = _norm_date(m.group("date"))
+        elif current:
+            t = re.sub(r"\s+", " ", m.group("time")).strip()
+            slots.append(f"{current} {t}")
+    return sorted(set(slots))
+
+
 def extract_slots(html: str, slot_regex: str) -> list[str]:
     text = visible_text(html)
     low = text.lower()
     if any(p in low for p in NO_SLOTS_PHRASES):
         return []
+    # Prefer the FrontDeskSuite date+time pairing when the page looks like it.
+    fd = extract_frontdesk_slots(text)
+    if fd:
+        return fd
     matches = re.findall(slot_regex, text, flags=re.IGNORECASE)
     # Normalise whitespace and de-duplicate while keeping deterministic order.
     slots = sorted({re.sub(r"\s+", " ", m).strip() for m in matches if m.strip()})
@@ -305,7 +339,7 @@ def run() -> int:
             f"text_len={len(vtext)} no_slots_phrase={matched_phrase!r}"
         )
         debug = os.environ.get("DEBUG", "").lower() in ("1", "true", "yes")
-        if debug or first_run:  # probe the page once when first watching a URL
+        if debug:  # set DEBUG=1 to dump page text/links for troubleshooting
             print("[debug] first 2000 chars of visible text:")
             print(vtext[:2000])
             print(f"[debug] first 40 regex matches: {re.findall(slot_regex, vtext, re.IGNORECASE)[:40]}")
@@ -378,7 +412,18 @@ def selftest() -> int:
     assert new == ["26/03/2026 kl. 09:00"], new
     assert none == [], none
     assert content_hash(sample_before) != content_hash(sample_after)
-    print("selftest OK:", {"before": before, "new": new, "none": none})
+
+    fd = extract_frontdesk_slots(
+        "Tuesday October 13ᵗʰ, 2026 9:20 a.m. 3:30 p.m. "
+        "Wednesday October 14ᵗʰ, 2026 2:40 p.m."
+    )
+    assert fd == [
+        "Tuesday October 13, 2026 3:30 p.m.",
+        "Tuesday October 13, 2026 9:20 a.m.",
+        "Wednesday October 14, 2026 2:40 p.m.",
+    ], fd
+
+    print("selftest OK:", {"before": before, "new": new, "none": none, "frontdesk": len(fd)})
     return 0
 
 
