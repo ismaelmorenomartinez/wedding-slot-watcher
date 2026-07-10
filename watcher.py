@@ -27,7 +27,7 @@ import http.cookiejar
 import urllib.request
 import urllib.error
 from urllib.parse import urlsplit, parse_qs
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 try:
     from bs4 import BeautifulSoup  # type: ignore
@@ -195,12 +195,13 @@ def content_hash(html: str) -> str:
     return hashlib.sha256(visible_text(html).encode("utf-8")).hexdigest()[:16]
 
 
-def push_ntfy(topic: str, server: str, title: str, message: str, click: str | None) -> bool:
+def push_ntfy(topic: str, server: str, title: str, message: str, click: str | None,
+              priority: str = "high", tags: str = "wedding_ring,bell") -> bool:
     url = f"{server.rstrip('/')}/{topic}"
     headers = {
         "Title": title.encode("utf-8"),
-        "Tags": "wedding_ring,bell",
-        "Priority": "high",
+        "Tags": tags,
+        "Priority": priority,
     }
     if click:
         headers["Click"] = click
@@ -260,6 +261,76 @@ def open_github_issue(title: str, message: str, click: str | None) -> bool:
         return False
 
 
+def _gh_env() -> tuple[str, str, str]:
+    token = os.environ.get("GITHUB_TOKEN", "").strip()
+    repo = os.environ.get("GITHUB_REPOSITORY", "").strip()
+    api = os.environ.get("GITHUB_API_URL", "https://api.github.com").rstrip("/")
+    return token, repo, api
+
+
+def _gh_post(url: str, payload: dict) -> dict:
+    token, _, _ = _gh_env()
+    req = urllib.request.Request(
+        url,
+        data=json.dumps(payload).encode("utf-8"),
+        headers={
+            "Authorization": f"Bearer {token}",
+            "Accept": "application/vnd.github+json",
+            "X-GitHub-Api-Version": "2022-11-28",
+            "User-Agent": "wedding-slot-watcher",
+        },
+        method="POST",
+    )
+    with urllib.request.urlopen(req, timeout=20) as resp:
+        return json.loads(resp.read().decode("utf-8"))
+
+
+def github_status_ping(meta: dict, title: str, message: str) -> bool:
+    """Post a heartbeat as a comment on a single rolling status issue.
+
+    Keeps the "still watching, nothing new" pings out of the main issue list --
+    real new-slot alerts still open their own issues via open_github_issue().
+    """
+    token, repo, api = _gh_env()
+    if not token or not repo:
+        return False
+    mention = os.environ.get("NOTIFY_MENTION", repo.split("/")[0]).lstrip("@").strip()
+    body = message + (f"\n\ncc @{mention}" if mention else "")
+    num = meta.get("status_issue")
+    if num:
+        try:
+            _gh_post(f"{api}/repos/{repo}/issues/{num}/comments", {"body": body})
+            print(f"[heartbeat] commented on status issue #{num}")
+            return True
+        except urllib.error.URLError as exc:
+            print(f"[heartbeat] status issue #{num} unavailable ({exc}); opening a new one", file=sys.stderr)
+            meta.pop("status_issue", None)
+    try:
+        data = _gh_post(
+            f"{api}/repos/{repo}/issues",
+            {"title": title, "body": body, "labels": ["watcher-status"]},
+        )
+        meta["status_issue"] = data.get("number")
+        print(f"[heartbeat] opened status issue #{data.get('number')}")
+        return True
+    except urllib.error.URLError as exc:
+        print(f"[heartbeat] FAILED to open status issue: {exc}", file=sys.stderr)
+        return False
+
+
+def send_heartbeat(topic: str, server: str, meta: dict, summary: str, click: str | None) -> None:
+    """Reassure you the watcher is alive when there is nothing new to report."""
+    title = "🟢 Wedding watcher: still watching, no new slots"
+    msg = f"No new Copenhagen City Hall wedding slots since the last alert. Currently {summary}."
+    sent = False
+    if topic:
+        sent = push_ntfy(topic, server, title, msg, click,
+                         priority="low", tags="hourglass_flowing_sand") or sent
+    sent = github_status_ping(meta, title, msg) or sent
+    if not sent:
+        print(f"[heartbeat] (no channel) {title}: {msg}")
+
+
 def notify(topic: str, title: str, message: str, click: str | None, server: str) -> None:
     """Send an alert through whichever channel is configured.
 
@@ -296,6 +367,7 @@ def run() -> int:
     ntfy_topic = os.environ.get("NTFY_TOPIC", "").strip()
     ntfy_server = os.environ.get("NTFY_SERVER", "https://ntfy.sh")
     notify_first_run = os.environ.get("NOTIFY_ON_FIRST_RUN", "").lower() in ("1", "true", "yes")
+    heartbeat_hours = float(os.environ.get("HEARTBEAT_HOURS", "3") or 0)
 
     # Manual smoke test: fire one push so you can confirm your phone is set up.
     if os.environ.get("TEST_NOTIFICATION", "").lower() in ("1", "true", "yes"):
@@ -377,6 +449,25 @@ def run() -> int:
             )
         elif first_run:
             print(f"        baseline recorded ({len(slots)} slots) -- no alert on first run")
+
+    # Heartbeat: if nothing new for a while, send a periodic "still watching" ping
+    # so silence never looks like a broken watcher. A real alert resets the timer.
+    if heartbeat_hours > 0 and urls:
+        meta = state.setdefault("__meta__", {})
+        all_slots = [s for u in urls for s in state.get(u, {}).get("slots", [])]
+        days = len({sl.rsplit(" ", 2)[0] for sl in all_slots})
+        summary = f"{len(all_slots)} open slot(s) across {days} day(s)"
+        if any_new:
+            meta["last_heartbeat"] = now  # a real alert already told you it's alive
+        else:
+            last = meta.get("last_heartbeat")
+            due = last is None or (
+                datetime.fromisoformat(now) - datetime.fromisoformat(last)
+                >= timedelta(hours=heartbeat_hours)
+            )
+            if due:
+                send_heartbeat(ntfy_topic, ntfy_server, meta, summary, urls[0])
+                meta["last_heartbeat"] = now
 
     save_state(state_file, state)
     print(f"[done] state written to {state_file}; new_slots_found={any_new}")
