@@ -36,9 +36,10 @@ except ImportError:  # keeps the script importable for --selftest without deps
 # --- Configuration (all overridable via env) --------------------------------
 
 DEFAULT_URLS = [
-    # Copenhagen City Hall (Rådhuset) wedding booking -- FrontDeskSuite
-    # "TimeSelection" page. The pageId/buttonId identify the wedding service.
-    "https://reservation.frontdesksuite.com/kkvielse/raadhuset/ReserveTime/TimeSelection?pageId=6bffdce0-29ab-4353-bdce-9392b1298063&buttonId=a93057c4-19bc-4478-aeec-cee9f35a86c9&culture=en",
+    # PROBE: FrontDeskSuite booking entry page (maps the flow that leads to the
+    # time selection). The deep TimeSelection link needs an established session
+    # ("FlowStateIsMissing" otherwise), so we start from the beginning here.
+    "https://reservation.frontdesksuite.com/kkvielse/raadhuset/",
 ]
 
 # Danish weekday / month tokens help us recognise a rendered slot.
@@ -272,9 +273,20 @@ def run() -> int:
         )
         debug = os.environ.get("DEBUG", "").lower() in ("1", "true", "yes")
         if debug or first_run:  # probe the page once when first watching a URL
-            print("[debug] first 1500 chars of visible text:")
-            print(vtext[:1500])
+            print("[debug] first 2000 chars of visible text:")
+            print(vtext[:2000])
             print(f"[debug] first 40 regex matches: {re.findall(slot_regex, vtext, re.IGNORECASE)[:40]}")
+            if BeautifulSoup is not None:
+                soup = BeautifulSoup(html, "html.parser")
+                for f in soup.find_all("form"):
+                    names = [i.get("name") or i.get("id") for i in f.find_all(("input", "select", "button"))]
+                    print(f"[debug] FORM action={f.get('action')!r} method={f.get('method')!r} fields={names}")
+                for a in soup.find_all("a", href=True)[:40]:
+                    txt = re.sub(r"\s+", " ", a.get_text(" ")).strip()
+                    print(f"[debug] LINK {a['href']!r} -> {txt[:60]!r}")
+                for b in soup.find_all("button")[:20]:
+                    btext = re.sub(r"\s+", " ", b.get_text(" ")).strip()[:60]
+                    print(f"[debug] BUTTON {b.get('name')!r}/{b.get('value')!r} -> {btext!r}")
 
         state[url] = {
             "slots": slots,
