@@ -1,18 +1,19 @@
 #!/usr/bin/env python3
-"""Kalundborg wedding-slot watcher.
+"""Copenhagen City Hall wedding-slot watcher.
 
-Polls one or more Kalundborg Kommune wedding-booking pages, extracts the set of
-available appointment slots, and alerts you whenever a slot appears that wasn't
-there last time. By default the alert opens a GitHub issue (which GitHub emails to
-you -- zero setup); set NTFY_TOPIC to also get an instant phone push via ntfy.sh.
+Polls the Copenhagen City Hall (Rådhuset) wedding booking page on the
+FrontDeskSuite reservation system, extracts the set of available appointment
+slots, and alerts you whenever a slot appears that wasn't there last time. By
+default the alert opens a GitHub issue (which GitHub emails to you -- zero
+setup); set NTFY_TOPIC to also get an instant phone push via ntfy.sh.
 
 State is kept in a small JSON file (STATE_FILE) so the watcher only alerts on
 *newly* available slots rather than re-announcing everything on every run. The
 GitHub Actions workflow commits that file back to the repo between runs.
 
 Everything is configured through environment variables so no secrets live in the
-code -- see README.md. The defaults point at Kalundborg's public wedding pages;
-override WATCH_URLS / SLOT_REGEX once you know the exact booking widget markup.
+code -- see README.md. The default points at the Copenhagen City Hall booking
+page; override WATCH_URLS / SLOT_REGEX to watch a different service or tune matching.
 """
 
 from __future__ import annotations
@@ -35,10 +36,9 @@ except ImportError:  # keeps the script importable for --selftest without deps
 # --- Configuration (all overridable via env) --------------------------------
 
 DEFAULT_URLS = [
-    # Kalundborg Kommune -- wedding ("vielse") information + booking entry point.
-    # If the actual time-slot picker lives on a separate self-service URL, set
-    # WATCH_URLS to that URL so the extractor sees the real availability.
-    "https://www.kalundborg.dk/service-and-selvbetjening/personlige-forhold/vielser/vielse-i-kalundborg-kommune",
+    # Copenhagen City Hall (Rådhuset) wedding booking -- FrontDeskSuite
+    # "TimeSelection" page. The pageId/buttonId identify the wedding service.
+    "https://reservation.frontdesksuite.com/kkvielse/raadhuset/ReserveTime/TimeSelection?pageId=6bffdce0-29ab-4353-bdce-9392b1298063&buttonId=a93057c4-19bc-4478-aeec-cee9f35a86c9&culture=en",
 ]
 
 # Danish weekday / month tokens help us recognise a rendered slot.
@@ -60,12 +60,17 @@ DEFAULT_SLOT_REGEX = (
 # Phrases that mean "nothing available" -- if the page says this, slots = empty
 # even if a stray date (e.g. today's date in a footer) matches the regex.
 NO_SLOTS_PHRASES = [
+    # Danish
     "ingen ledige tider",
     "ingen ledige tid",
     "ingen tider",
     "der er ingen ledige",
     "fuldt booket",
     "ikke muligt at booke",
+    # English (FrontDeskSuite wording)
+    "no available times",
+    "there are no available",
+    "no times available",
     "no available",
     "fully booked",
 ]
@@ -228,7 +233,7 @@ def run() -> int:
     if os.environ.get("TEST_NOTIFICATION", "").lower() in ("1", "true", "yes"):
         notify(
             topic=ntfy_topic,
-            title="Kalundborg watcher: test 🔔",
+            title="Copenhagen wedding watcher: test 🔔",
             message="If you can read this on your phone, notifications work.",
             click=urls[0] if urls else None,
             server=ntfy_server,
@@ -249,6 +254,8 @@ def run() -> int:
             state[url]["last_checked"] = now
             continue
 
+        vtext = visible_text(html)
+        matched_phrase = next((p for p in NO_SLOTS_PHRASES if p in vtext.lower()), None)
         slots = extract_slots(html, slot_regex)
         chash = content_hash(html)
         prev_slots = set(prev.get("slots", []))
@@ -260,8 +267,14 @@ def run() -> int:
         print(
             f"[check] {url}\n"
             f"        slots={len(slots)} new={len(new_slots)} "
-            f"changed={changed} first_run={first_run}"
+            f"changed={changed} first_run={first_run} "
+            f"text_len={len(vtext)} no_slots_phrase={matched_phrase!r}"
         )
+        debug = os.environ.get("DEBUG", "").lower() in ("1", "true", "yes")
+        if debug or first_run:  # probe the page once when first watching a URL
+            print("[debug] first 1500 chars of visible text:")
+            print(vtext[:1500])
+            print(f"[debug] first 40 regex matches: {re.findall(slot_regex, vtext, re.IGNORECASE)[:40]}")
 
         state[url] = {
             "slots": slots,
@@ -278,7 +291,7 @@ def run() -> int:
                 preview += f"\n… and {len(new_slots) - 15} more"
             notify(
                 topic=ntfy_topic,
-                title=f"Kalundborg: {len(new_slots)} new wedding slot(s)!",
+                title=f"Copenhagen City Hall: {len(new_slots)} new wedding slot(s)!",
                 message=f"{preview}\n\nOpen the booking page to grab one.",
                 click=url,
                 server=ntfy_server,
