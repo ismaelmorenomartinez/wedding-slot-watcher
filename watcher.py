@@ -23,8 +23,10 @@ import json
 import os
 import re
 import sys
+import http.cookiejar
 import urllib.request
 import urllib.error
+from urllib.parse import urlsplit, parse_qs
 from datetime import datetime, timezone
 
 try:
@@ -36,10 +38,11 @@ except ImportError:  # keeps the script importable for --selftest without deps
 # --- Configuration (all overridable via env) --------------------------------
 
 DEFAULT_URLS = [
-    # PROBE 2: the two calendar landing pages (all couples / Copenhagen residents)
-    # to find the "reserve time" step that leads into the availability flow.
-    "https://reservation.frontdesksuite.com/kkvielse/raadhuset/Home/Index?pageId=c819aa7d-575b-4633-b7c0-a1d425b72390&culture=en&uiCulture=en",
-    "https://reservation.frontdesksuite.com/kkvielse/raadhuset/Home/Index?pageId=3777e58e-1dc4-4ab1-8ee5-1200947805d5&culture=en&uiCulture=en",
+    # Copenhagen City Hall (Rådhuset) wedding booking -- "open to all couples"
+    # calendar. This is a FrontDeskSuite StartReservation URL: fetch() walks the
+    # session flow (base -> calendar -> StartReservation) so the availability
+    # page loads instead of erroring with FlowStateIsMissing.
+    "https://reservation.frontdesksuite.com/kkvielse/raadhuset/ReserveTime/StartReservation?pageId=c819aa7d-575b-4633-b7c0-a1d425b72390&buttonId=d77d235b-8f65-44e5-bccd-fc93e4edddc8&culture=en&uiCulture=en",
 ]
 
 # Danish weekday / month tokens help us recognise a rendered slot.
@@ -93,9 +96,39 @@ def get_env_list(name: str, default: list[str]) -> list[str]:
 # --- Core ------------------------------------------------------------------
 
 
+def _query_param(url: str, name: str) -> str | None:
+    vals = parse_qs(urlsplit(url).query)
+    got = vals.get(name) or vals.get(name.lower())
+    return got[0] if got else None
+
+
 def fetch(url: str, timeout: int = 30) -> str:
-    req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT, "Accept-Language": "da,en"})
-    with urllib.request.urlopen(req, timeout=timeout) as resp:
+    """Fetch a page, following redirects and keeping cookies.
+
+    FrontDeskSuite's booking steps need a session: hitting a StartReservation or
+    TimeSelection URL cold fails with "FlowStateIsMissing". So when we detect one,
+    we first warm the session (base page, then the calendar page) with a shared
+    cookie jar, which lets StartReservation redirect into the availability page.
+    """
+    headers = {"User-Agent": USER_AGENT, "Accept-Language": "da,en"}
+    opener = urllib.request.build_opener(
+        urllib.request.HTTPCookieProcessor(http.cookiejar.CookieJar())
+    )
+
+    if "/ReserveTime/" in url:
+        parts = urlsplit(url)
+        base = f"{parts.scheme}://{parts.netloc}{parts.path.split('/ReserveTime/')[0]}/"
+        page_id = _query_param(url, "pageId")
+        warmups = [base]
+        if page_id:
+            warmups.append(f"{base}Home/Index?pageId={page_id}&culture=en&uiCulture=en")
+        for w in warmups:
+            try:
+                opener.open(urllib.request.Request(w, headers=headers), timeout=timeout).read()
+            except (urllib.error.URLError, TimeoutError):
+                pass  # best-effort warm-up; the real fetch below reports failures
+
+    with opener.open(urllib.request.Request(url, headers=headers), timeout=timeout) as resp:
         charset = resp.headers.get_content_charset() or "utf-8"
         return resp.read().decode(charset, errors="replace")
 
