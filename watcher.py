@@ -36,10 +36,10 @@ except ImportError:  # keeps the script importable for --selftest without deps
 # --- Configuration (all overridable via env) --------------------------------
 
 DEFAULT_URLS = [
-    # PROBE: FrontDeskSuite booking entry page (maps the flow that leads to the
-    # time selection). The deep TimeSelection link needs an established session
-    # ("FlowStateIsMissing" otherwise), so we start from the beginning here.
-    "https://reservation.frontdesksuite.com/kkvielse/raadhuset/",
+    # PROBE 2: the two calendar landing pages (all couples / Copenhagen residents)
+    # to find the "reserve time" step that leads into the availability flow.
+    "https://reservation.frontdesksuite.com/kkvielse/raadhuset/Home/Index?pageId=c819aa7d-575b-4633-b7c0-a1d425b72390&culture=en&uiCulture=en",
+    "https://reservation.frontdesksuite.com/kkvielse/raadhuset/Home/Index?pageId=3777e58e-1dc4-4ab1-8ee5-1200947805d5&culture=en&uiCulture=en",
 ]
 
 # Danish weekday / month tokens help us recognise a rendered slot.
