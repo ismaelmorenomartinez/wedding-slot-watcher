@@ -1,19 +1,25 @@
-name: Watch Kalundborg wedding slots
+name: Watch Copenhagen wedding slots
 
 on:
   schedule:
-    - cron: "*/5 * * * *"
+    # Backstop only: revives the chain if it ever dies. The real 5-min cadence
+    # comes from the loop below plus the self-relaunch step at the end.
+    - cron: "*/15 * * * *"
   workflow_dispatch:
     inputs:
       test_notification:
-        description: "Send a one-off test push and exit (verifies your phone setup)"
+        description: "Send a one-off test alert and exit"
         type: boolean
         default: false
 
+# contents: commit state.json back; issues: open alert issues;
+# actions: let the run relaunch itself (self-chain).
 permissions:
   contents: write
   issues: write
+  actions: write
 
+# Only one watcher at a time; extra triggers wait (at most one queues).
 concurrency:
   group: watch
   cancel-in-progress: false
@@ -21,6 +27,7 @@ concurrency:
 jobs:
   watch:
     runs-on: ubuntu-latest
+    timeout-minutes: 55
     steps:
       - uses: actions/checkout@v4
 
@@ -31,24 +38,62 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements.txt
 
-      - name: Run watcher
+      - name: Send test alert and exit
+        if: ${{ inputs.test_notification }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
+          TEST_NOTIFICATION: "true"
+        run: python watcher.py
+
+      - name: Watch loop (a check every 5 min for ~50 min)
+        if: ${{ !inputs.test_notification }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
           WATCH_URLS: ${{ vars.WATCH_URLS }}
           SLOT_REGEX: ${{ vars.SLOT_REGEX }}
-          TEST_NOTIFICATION: ${{ inputs.test_notification }}
-        run: python watcher.py
-
-      - name: Commit updated state
-        if: ${{ !inputs.test_notification }}
         run: |
-          if [ -n "$(git status --porcelain state.json)" ]; then
-            git config user.name "github-actions[bot]"
-            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-            git add state.json
-            git commit -m "Update slot state [skip ci]"
-            git push
-          else
-            echo "No state change."
-          fi
+          set +e
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          commit_state() {
+            if [ -n "$(git status --porcelain state.json)" ]; then
+              git add state.json
+              git commit -q -m "Update slot state [skip ci]"
+            fi
+            # Push any unpushed commits (retries here if an earlier push failed)
+            if [ -n "$(git log --oneline origin/main..HEAD 2>/dev/null)" ]; then
+              git pull -q --rebase --autostash origin main
+              git push -q origin main || echo "::warning::state push failed; will retry next check"
+            fi
+          }
+
+          END=$(( $(date +%s) + 50 * 60 ))
+          checks=0
+          fails=0
+          while :; do
+            checks=$((checks + 1))
+            echo "=== check $checks at $(date -u +%H:%M:%SZ) ==="
+            python watcher.py || { fails=$((fails + 1)); echo "::warning::check $checks failed"; }
+            commit_state
+            [ "$(date +%s)" -ge "$END" ] && break
+            sleep 300
+          done
+
+          echo "done: $checks checks, $fails failures"
+          # Fail the run (pausing the chain until the scheduled backstop)
+          # only if EVERY check in this window failed.
+          [ "$fails" -lt "$checks" ] || exit 1
+
+      - name: Relaunch the loop (self-chain)
+        if: ${{ !inputs.test_notification }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          curl -sS --fail -X POST \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/$GITHUB_REPOSITORY/actions/workflows/watch.yml/dispatches" \
+            -d '{"ref":"main"}'
