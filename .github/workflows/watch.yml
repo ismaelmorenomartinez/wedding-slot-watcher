@@ -2,7 +2,7 @@ name: Watch Kalundborg wedding slots
 
 on:
   schedule:
-    - cron: "*/30 * * * *"
+    - cron: "*/5 * * * *"
   workflow_dispatch:
     inputs:
       test_notification:
