@@ -24,9 +24,11 @@ import os
 import re
 import sys
 import http.cookiejar
+import smtplib
 import urllib.request
 import urllib.error
 from urllib.parse import urlsplit, parse_qs
+from email.message import EmailMessage
 from datetime import datetime, timedelta, timezone
 
 try:
@@ -327,8 +329,39 @@ def send_heartbeat(topic: str, server: str, meta: dict, summary: str, click: str
         sent = push_ntfy(topic, server, title, msg, click,
                          priority="low", tags="hourglass_flowing_sand") or sent
     sent = github_status_ping(meta, title, msg) or sent
+    sent = send_email_smtp(title, msg) or sent
     if not sent:
         print(f"[heartbeat] (no channel) {title}: {msg}")
+
+
+def send_email_smtp(subject: str, body: str) -> bool:
+    """Email an alert directly via SMTP (e.g. Gmail). No-op unless configured.
+
+    Reads SMTP_USER / SMTP_PASS (a Gmail App Password) and optionally SMTP_HOST,
+    SMTP_PORT, EMAIL_FROM, NOTIFY_EMAIL (recipient; defaults to SMTP_USER).
+    """
+    user = os.environ.get("SMTP_USER", "").strip()
+    password = os.environ.get("SMTP_PASS", "").strip()
+    if not user or not password:
+        return False
+    host = os.environ.get("SMTP_HOST", "smtp.gmail.com").strip()
+    port = int(os.environ.get("SMTP_PORT", "587") or 587)
+    to_addr = os.environ.get("NOTIFY_EMAIL", "").strip() or user
+    msg = EmailMessage()
+    msg["From"] = os.environ.get("EMAIL_FROM", "").strip() or user
+    msg["To"] = to_addr
+    msg["Subject"] = subject
+    msg.set_content(body)
+    try:
+        with smtplib.SMTP(host, port, timeout=30) as smtp:
+            smtp.starttls()
+            smtp.login(user, password)
+            smtp.send_message(msg)
+        print(f"[notify] emailed {to_addr}")
+        return True
+    except (smtplib.SMTPException, OSError) as exc:
+        print(f"[notify] FAILED to email {to_addr}: {exc}", file=sys.stderr)
+        return False
 
 
 def notify(topic: str, title: str, message: str, click: str | None, server: str) -> None:
@@ -341,6 +374,8 @@ def notify(topic: str, title: str, message: str, click: str | None, server: str)
     if topic:
         sent = push_ntfy(topic, server, title, message, click) or sent
     sent = open_github_issue(title, message, click) or sent
+    email_body = message + (f"\n\nOpen the booking page: {click}" if click else "")
+    sent = send_email_smtp(title, email_body) or sent
     if not sent:
         print("[notify] no channel configured -- would have sent:")
         print(f"         {title}: {message}")
