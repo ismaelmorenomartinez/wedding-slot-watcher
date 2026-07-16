@@ -1,13 +1,13 @@
 {
   "__meta__": {
-    "last_heartbeat": "2026-07-16T11:07:13+00:00",
+    "last_heartbeat": "2026-07-16T11:12:20+00:00",
     "status_issue": 4
   },
   "https://reservation.frontdesksuite.com/kkvielse/raadhuset/ReserveTime/StartReservation?pageId=c819aa7d-575b-4633-b7c0-a1d425b72390&buttonId=d77d235b-8f65-44e5-bccd-fc93e4edddc8&culture=en&uiCulture=en": {
-    "hash": "901d6115dbf732d4",
-    "last_checked": "2026-07-16T11:07:13+00:00",
+    "hash": "b71d4f3833155ccd",
+    "last_checked": "2026-07-16T11:12:20+00:00",
     "last_new": [
-      "Wednesday September 30, 2026 3:00 p.m."
+      "Tuesday October 20, 2026 3:30 p.m."
     ],
     "slots": [
       "Friday November 6, 2026 10:00 a.m.",
@@ -197,6 +197,7 @@
       "Tuesday October 20, 2026 10:10 a.m.",
       "Tuesday October 20, 2026 10:20 a.m.",
       "Tuesday October 20, 2026 10:30 a.m.",
+      "Tuesday October 20, 2026 3:30 p.m.",
       "Tuesday October 20, 2026 9:10 a.m.",
       "Tuesday October 20, 2026 9:20 a.m.",
       "Tuesday October 20, 2026 9:30 a.m.",
@@ -284,8 +285,7 @@
       "Wednesday October 28, 2026 2:50 p.m.",
       "Wednesday October 28, 2026 3:10 p.m.",
       "Wednesday October 28, 2026 3:20 p.m.",
-      "Wednesday October 28, 2026 3:40 p.m.",
-      "Wednesday September 30, 2026 3:00 p.m."
+      "Wednesday October 28, 2026 3:40 p.m."
     ]
   }
 }
