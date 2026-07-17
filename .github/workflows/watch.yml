@@ -2,7 +2,7 @@ name: Watch Copenhagen wedding slots
 
 on:
   schedule:
-    # Backstop only: revives the chain if it ever dies. The real 5-min cadence
+    # Backstop only: revives the chain if it ever dies. The real cadence
     # comes from the loop below plus the self-relaunch step at the end.
     - cron: "*/15 * * * *"
   workflow_dispatch:
@@ -46,13 +46,17 @@ jobs:
           TEST_NOTIFICATION: "true"
         run: python watcher.py
 
-      - name: Watch loop (a check every 5 min for ~50 min)
+      - name: Watch loop (default one check per minute, ~50 min total)
         if: ${{ !inputs.test_notification }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
           WATCH_URLS: ${{ vars.WATCH_URLS }}
           SLOT_REGEX: ${{ vars.SLOT_REGEX }}
+          # Seconds between checks. Tune via repo variable CHECK_SECONDS
+          # (Settings > Secrets and variables > Actions > Variables) -- no
+          # workflow edit needed. Default 60 (one check per minute).
+          CHECK_SECONDS: ${{ vars.CHECK_SECONDS }}
         run: |
           set +e
           git config user.name "github-actions[bot]"
@@ -70,6 +74,8 @@ jobs:
             fi
           }
 
+          INTERVAL="${CHECK_SECONDS:-60}"
+          echo "check interval: ${INTERVAL}s"
           END=$(( $(date +%s) + 50 * 60 ))
           checks=0
           fails=0
@@ -79,7 +85,7 @@ jobs:
             python watcher.py || { fails=$((fails + 1)); echo "::warning::check $checks failed"; }
             commit_state
             [ "$(date +%s)" -ge "$END" ] && break
-            sleep 300
+            sleep "$INTERVAL"
           done
 
           echo "done: $checks checks, $fails failures"
