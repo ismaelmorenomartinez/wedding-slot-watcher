@@ -29,10 +29,11 @@ the earlier steps in the same session — a bare request fails with
 4. When a **new** slot appears, it opens a GitHub issue titled e.g.
    *"Copenhagen City Hall: 2 new wedding slot(s)!"* and @mentions you.
 
-A GitHub Actions job checks **every ~5 minutes**: each run loops internally for
-~50 minutes (one check per 5 min) and then relaunches itself, so the cadence
-doesn't depend on GitHub's best-effort cron (which stays in place only as a
-backstop to revive the chain). The first run for a URL just records a baseline —
+A GitHub Actions job checks **every ~2.5 minutes by default**: each run loops
+internally for ~50 minutes and then relaunches itself, so the cadence doesn't
+depend on GitHub's best-effort cron (which stays in place only as a backstop to
+revive the chain). Tune the interval with the `CHECK_SECONDS` repo variable
+(e.g. `60` for one check per minute) — no workflow edit needed. The first run for a URL just records a baseline —
 it won't spam you with every currently-open slot.
 
 ## Setup — the zero-config default
@@ -51,7 +52,7 @@ To make sure the alerts reach you:
 **Actions → Watch wedding slots → Run workflow** runs it once. Tick
 **test_notification** to fire a one-off test alert and confirm notifications reach
 you. A normal run records the current availability as a baseline (no alert), then
-the self-relaunching loop takes over (~every 5 minutes).
+the self-relaunching loop takes over (every `CHECK_SECONDS` seconds, default 150).
 
 ## Optional: instant phone push via ntfy
 
@@ -76,6 +77,7 @@ Set these as **repo variables** (Settings → Secrets and variables → Actions 
 |--------------|---------|
 | `WATCH_URLS` | Which booking flow to watch (comma-separated). See the two calendars below. |
 | `SLOT_REGEX` | Fallback slot pattern for non-FrontDeskSuite pages (unused for Copenhagen). |
+| `CHECK_SECONDS` | Seconds between checks inside the watch loop (default `150`). |
 
 The two Copenhagen City Hall calendars (both are `StartReservation` URLs the watcher
 knows how to walk):
