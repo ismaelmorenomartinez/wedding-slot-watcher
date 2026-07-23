@@ -26,8 +26,11 @@ the earlier steps in the same session — a bare request fails with
    `Tuesday October 13, 2026 9:20 a.m.`
 3. Compares them against the last run (stored in `state.json`, which the Action
    commits back to the repo).
-4. When a **new** slot appears, it opens a GitHub issue titled e.g.
-   *"Copenhagen City Hall: 2 new wedding slot(s)!"* and @mentions you.
+4. When a **new slot matching `SLOT_FILTER`** appears (default: only slots on
+   **August 25**, the booked wedding date), it sends an ntfy push and opens a
+   GitHub issue @mentioning you. New slots on other dates are logged but ignored.
+   Nothing is sent when there is no change (heartbeats are off by default;
+   set `HEARTBEAT_HOURS` to re-enable periodic still-alive pings).
 
 A GitHub Actions job checks **every ~2.5 minutes by default**: each run loops
 internally for ~50 minutes and then relaunches itself, so the cadence doesn't
@@ -120,6 +123,8 @@ All settings are environment variables:
 | `WATCH_URLS` | all-couples calendar | Comma-separated booking flow URL(s) |
 | `SLOT_REGEX` | built-in heuristic | Fallback slot pattern (non-FrontDeskSuite) |
 | `STATE_FILE` | `state.json` | Where last-seen slots are stored |
+| `SLOT_FILTER` | `august 25` | Comma-separated substrings; only matching slots alert (empty = all) |
+| `HEARTBEAT_HOURS` | `0` (off) | Hours between still-alive pings when nothing changes |
 | `NOTIFY_ON_FIRST_RUN` | `false` | Alert on the very first run too |
 | `TEST_NOTIFICATION` | `false` | Send one test alert and exit |
 | `DEBUG` | `false` | Dump fetched page text/links to the log |

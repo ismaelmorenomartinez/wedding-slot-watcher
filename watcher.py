@@ -400,9 +400,18 @@ def run() -> int:
     slot_regex = os.environ.get("SLOT_REGEX", DEFAULT_SLOT_REGEX)
     state_file = os.environ.get("STATE_FILE", "state.json")
     ntfy_topic = os.environ.get("NTFY_TOPIC", "").strip()
+    # Only alert for slots whose text matches one of these substrings
+    # (case-insensitive, comma-separated). Empty string disables filtering.
+    # Default: only the already-booked wedding date, to catch better times.
+    slot_filter = [
+        f.strip().lower()
+        for f in os.environ.get("SLOT_FILTER", "august 25").split(",")
+        if f.strip()
+    ]
     ntfy_server = os.environ.get("NTFY_SERVER", "https://ntfy.sh")
     notify_first_run = os.environ.get("NOTIFY_ON_FIRST_RUN", "").lower() in ("1", "true", "yes")
-    heartbeat_hours = float(os.environ.get("HEARTBEAT_HOURS", "3") or 0)
+    # Heartbeats are OFF by default: notifications only on an actual change.
+    heartbeat_hours = float(os.environ.get("HEARTBEAT_HOURS", "0") or 0)
 
     # Manual smoke test: fire one push so you can confirm your phone is set up.
     if os.environ.get("TEST_NOTIFICATION", "").lower() in ("1", "true", "yes"):
@@ -469,15 +478,22 @@ def run() -> int:
             "last_new": new_slots or prev.get("last_new", []),
         }
 
-        should_notify = bool(new_slots) and (not first_run or notify_first_run)
+        if slot_filter:
+            wanted = [s for s in new_slots if any(f in s.lower() for f in slot_filter)]
+            if new_slots and not wanted:
+                print(f"        {len(new_slots)} new slot(s) ignored (not matching {slot_filter})")
+        else:
+            wanted = new_slots
+
+        should_notify = bool(wanted) and (not first_run or notify_first_run)
         if should_notify:
             any_new = True
-            preview = "\n".join(f"• {s}" for s in new_slots[:15])
-            if len(new_slots) > 15:
-                preview += f"\n… and {len(new_slots) - 15} more"
+            preview = "\n".join(f"• {s}" for s in wanted[:15])
+            if len(wanted) > 15:
+                preview += f"\n… and {len(wanted) - 15} more"
             notify(
                 topic=ntfy_topic,
-                title=f"Copenhagen City Hall: {len(new_slots)} new wedding slot(s)!",
+                title=f"Copenhagen City Hall: {len(wanted)} new slot(s) on your date!",
                 message=f"{preview}\n\nOpen the booking page to grab one.",
                 click=url,
                 server=ntfy_server,
