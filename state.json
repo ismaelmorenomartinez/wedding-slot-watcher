@@ -4,8 +4,8 @@
     "status_issue": 4
   },
   "https://reservation.frontdesksuite.com/kkvielse/raadhuset/ReserveTime/StartReservation?pageId=c819aa7d-575b-4633-b7c0-a1d425b72390&buttonId=d77d235b-8f65-44e5-bccd-fc93e4edddc8&culture=en&uiCulture=en": {
-    "hash": "e8b6de939e60a108",
-    "last_checked": "2026-07-24T15:14:25+00:00",
+    "hash": "d6e51b2b4b241f7c",
+    "last_checked": "2026-07-24T15:15:29+00:00",
     "last_new": [
       "Tuesday October 27, 2026 9:10 a.m."
     ],
@@ -232,7 +232,6 @@
       "Tuesday November 3, 2026 9:30 a.m.",
       "Tuesday November 3, 2026 9:40 a.m.",
       "Tuesday November 3, 2026 9:50 a.m.",
-      "Tuesday October 27, 2026 9:10 a.m.",
       "Tuesday October 27, 2026 9:20 a.m.",
       "Tuesday October 27, 2026 9:30 a.m.",
       "Wednesday November 11, 2026 12:10 p.m.",
