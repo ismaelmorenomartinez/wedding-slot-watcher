@@ -4,10 +4,15 @@
     "status_issue": 4
   },
   "https://reservation.frontdesksuite.com/kkvielse/raadhuset/ReserveTime/StartReservation?pageId=c819aa7d-575b-4633-b7c0-a1d425b72390&buttonId=d77d235b-8f65-44e5-bccd-fc93e4edddc8&culture=en&uiCulture=en": {
-    "hash": "74aa617c7dbc803a",
-    "last_checked": "2026-08-14T02:59:42+00:00",
+    "hash": "e428c9a8a660ad43",
+    "last_checked": "2026-08-14T03:00:46+00:00",
     "last_new": [
-      "Monday November 9, 2026 1:40 p.m."
+      "Saturday December 12, 2026 10:00 a.m.",
+      "Saturday December 12, 2026 10:10 a.m.",
+      "Saturday December 12, 2026 10:20 a.m.",
+      "Saturday December 12, 2026 10:30 a.m.",
+      "Saturday December 12, 2026 10:40 a.m.",
+      "Saturday December 12, 2026 10:50 a.m."
     ],
     "slots": [
       "Friday December 11, 2026 10:00 a.m.",
@@ -167,6 +172,12 @@
       "Monday November 9, 2026 2:20 p.m.",
       "Monday November 9, 2026 2:50 p.m.",
       "Monday November 9, 2026 3:20 p.m.",
+      "Saturday December 12, 2026 10:00 a.m.",
+      "Saturday December 12, 2026 10:10 a.m.",
+      "Saturday December 12, 2026 10:20 a.m.",
+      "Saturday December 12, 2026 10:30 a.m.",
+      "Saturday December 12, 2026 10:40 a.m.",
+      "Saturday December 12, 2026 10:50 a.m.",
       "Thursday December 10, 2026 10:00 a.m.",
       "Thursday December 10, 2026 10:10 a.m.",
       "Thursday December 10, 2026 10:20 a.m.",
