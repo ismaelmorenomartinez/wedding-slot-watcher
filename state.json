@@ -4,8 +4,8 @@
     "status_issue": 4
   },
   "https://reservation.frontdesksuite.com/kkvielse/raadhuset/ReserveTime/StartReservation?pageId=c819aa7d-575b-4633-b7c0-a1d425b72390&buttonId=d77d235b-8f65-44e5-bccd-fc93e4edddc8&culture=en&uiCulture=en": {
-    "hash": "b0086c696ce58d2d",
-    "last_checked": "2026-08-23T13:05:26+00:00",
+    "hash": "fc293f2cfa96494b",
+    "last_checked": "2026-08-23T13:06:32+00:00",
     "last_new": [
       "Monday November 23, 2026 12:30 p.m.",
       "Monday November 23, 2026 12:40 p.m."
@@ -60,7 +60,6 @@
       "Friday December 4, 2026 9:30 a.m.",
       "Friday December 4, 2026 9:40 a.m.",
       "Friday December 4, 2026 9:50 a.m.",
-      "Friday November 27, 2026 9:10 a.m.",
       "Friday November 27, 2026 9:20 a.m.",
       "Monday December 14, 2026 11:50 a.m.",
       "Monday December 14, 2026 12:00 p.m.",
